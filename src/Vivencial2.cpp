@@ -1,4 +1,4 @@
-/* Tarefa do Módulo 2 - Victor Silva da Rosa */
+/* Atividade vivencial do Módulo 2 - Victor Silva da Rosa */
 
 #include <iostream>
 #include <fstream>
@@ -6,8 +6,6 @@
 #include <string>
 #include <vector>
 #include <assert.h>
-
-using namespace std;
 
 // GLAD
 #include <glad/glad.h>
@@ -20,50 +18,22 @@ using namespace std;
 #include <glm/gtc/matrix_transform.hpp>
 #include <glm/gtc/type_ptr.hpp>
 
+#define GLM_ENABLE_EXPERIMENTAL
+#include <glm/gtx/string_cast.hpp>
+
+using namespace std;
+using namespace glm;
+
 const GLuint WIDTH = 800, HEIGHT = 800;
-const int MAX_OBJECTS = 32;
+const int MAX_OBJECTS = 10;
 
 const string meshes[] {
     "../meshes/Cube.obj",
     "../meshes/Suzanne.obj",
 };
 
-const GLchar* vertexShaderSource = R"(
-#version 450
-
-layout (location = 0) in vec3 v_position;
-layout (location = 1) in vec3 v_normal;
-layout (location = 2) in vec2 v_uv;
-
-uniform mat4 model;
-
-out vec3 f_position;
-out vec3 f_normal;
-out vec2 f_uv;
-
-void main() {
-	gl_Position = model * vec4(v_position, 1.0);
-    f_position = v_position;
-    f_normal = v_normal;
-    f_uv = v_uv;
-}
-)";
-
-const GLchar* fragmentShaderSource = R"(
-#version 450
-
-in vec3 f_position;
-in vec3 f_normal;
-in vec2 f_uv;
-
-out vec4 color;
-
-void main() {
-	color = vec4(f_uv, 0.0, 1.0);
-}
-)";
-
 int loadSimpleOBJ(string filePath, int &nVertices);
+string loadFile(string filePath);
 void key_callback(GLFWwindow* window, int key, int scancode, int action, int mode);
 int setupShader();
 void setupMeshes();
@@ -71,8 +41,6 @@ void updateMeshes();
 void renderMeshes(GLint modelLoc);
 
 struct Inputs {
-    int selectedObject;
-
     // Mover
     bool W;
     bool A;
@@ -94,13 +62,15 @@ struct Inputs {
 struct Object {
     GLuint VAO;
     int nVertex;
-    glm::vec3 position;
-    glm::vec3 rotation;
+    vec3 position;
+    vec3 rotation;
     float scale;
 };
 
 Inputs inputs;
 Object objects[MAX_OBJECTS];
+int objectsCount = 0;
+int selectedObject = 0;
 float lastFrame = 0;
 
 int main() {
@@ -113,7 +83,7 @@ int main() {
 
 	if (!gladLoadGLLoader((GLADloadproc)glfwGetProcAddress))
 	{
-		std::cout << "Failed to initialize GLAD" << std::endl;
+		cout << "Failed to initialize GLAD" << endl;
 	}
 
 	const GLubyte* renderer = glGetString(GL_RENDERER);
@@ -133,19 +103,22 @@ int main() {
     glUseProgram(shaderID);
 	glEnable(GL_DEPTH_TEST);
 
+    lastFrame = (float)glfwGetTime();
+
     while (!glfwWindowShouldClose(window))
 	{
 		// Checa se houveram eventos de input (key pressed, mouse moved etc.) e chama as funções de callback correspondentes
 		glfwPollEvents();
-		lastFrame = (float)glfwGetTime();
-
+        
 		// Limpa o buffer de cor
 		glClearColor(0, 0, 0, 0); //cor de fundo
 		glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-
+        
 		updateMeshes();
-        renderMeshes(modelLoc);
+		lastFrame = (float)glfwGetTime();
 
+        renderMeshes(modelLoc);
+        
 		// Troca os buffers da tela
 		glfwSwapBuffers(window);
 	}
@@ -157,36 +130,85 @@ void key_callback(GLFWwindow* window, int key, int scancode, int action, int mod
 		glfwSetWindowShouldClose(window, GL_TRUE);
 		return;
 	}
+
+    if (key == GLFW_KEY_W) inputs.W = action;
+    if (key == GLFW_KEY_A) inputs.A = action;
+    if (key == GLFW_KEY_S) inputs.S = action;
+    if (key == GLFW_KEY_D) inputs.D = action;
+    if (key == GLFW_KEY_I) inputs.I = action;
+    if (key == GLFW_KEY_J) inputs.J = action;
+    if (key == GLFW_KEY_X) inputs.X = action;
+    if (key == GLFW_KEY_Y) inputs.Y = action;
+    if (key == GLFW_KEY_Z) inputs.Z = action;
+    if (key == GLFW_KEY_LEFT_BRACKET) inputs.leftBracket = action;
+    if (key == GLFW_KEY_RIGHT_BRACKET) inputs.rightBracket = action;
+
+    if (key == GLFW_KEY_1) selectedObject = 0;
+    if (key == GLFW_KEY_2) selectedObject = 1;
+    if (key == GLFW_KEY_3) selectedObject = 2;
+    if (key == GLFW_KEY_4) selectedObject = 3;
+    if (key == GLFW_KEY_5) selectedObject = 4;
+    if (key == GLFW_KEY_6) selectedObject = 5;
+    if (key == GLFW_KEY_7) selectedObject = 6;
+    if (key == GLFW_KEY_8) selectedObject = 7;
+    if (key == GLFW_KEY_9) selectedObject = 8;
+    if (key == GLFW_KEY_0) selectedObject = 9;
+    
+    selectedObject = selectedObject % MAX_OBJECTS;
 }
 
 void setupMeshes() {
     for (int i = 0; i < size(meshes); i++) {
         Object obj;
         obj.VAO = loadSimpleOBJ(meshes[i], obj.nVertex);
-        obj.position = glm::vec3(0, 0, 0);
-        obj.rotation = glm::vec3(0, 0, 0);
+        obj.position = vec3(0, 0, 0);
+        obj.rotation = vec3(0, 0, 0);
         obj.scale = .5f;
 
         objects[i] = obj;
+        objectsCount++;
     }
 }
 
 void updateMeshes() {
+    float delta = (float)glfwGetTime() - lastFrame;
+    Object selected = objects[selectedObject];
 
+    vec3 posOffset = vec3(inputs.D - inputs.A, inputs.I - inputs.J, inputs.W - inputs.S) * delta;
+    vec3 rotOffset = vec3(inputs.X, inputs.Y, inputs.Z) * delta;
+    float scaleOffset = (inputs.rightBracket - inputs.leftBracket) * delta;
+
+    selected.position += posOffset;
+    selected.rotation += rotOffset;
+    selected.scale += scaleOffset;
+    
+    objects[selectedObject] = selected;
 }
 
 void renderMeshes(GLint modelLoc) {
-    for (int i = 0; i < size(meshes); i++) {
+    for (int i = 0; i < objectsCount; i++) {
         Object obj = objects[i];
 
-        glm::mat4 model = glm::mat4(1);
-        model = glm::translate(model, obj.position);
-		// model = glm::rotate(model, 0.f, obj.rotation);
-		model = glm::scale(model, glm::vec3(obj.scale));
-		glUniformMatrix4fv(modelLoc, 1, GL_FALSE, glm::value_ptr(model));
+        mat4 model = mat4(1);
+
+        model = translate(model, obj.position);
+        
+		model = rotate(model, obj.rotation.z, vec3(0, 0, 1));
+		model = rotate(model, obj.rotation.y, vec3(0, 1, 0));
+		model = rotate(model, obj.rotation.x, vec3(1, 0, 0));
+
+		model = scale(model, vec3(obj.scale));
+
+		glUniformMatrix4fv(modelLoc, 1, GL_FALSE, value_ptr(model));
 
 		glBindVertexArray(obj.VAO);
 		glDrawArrays(GL_TRIANGLES, 0, obj.nVertex);
+
+        if (selectedObject == i) {
+            glPointSize(10);
+            glDrawArrays(GL_POINTS, 0, obj.nVertex);
+        }
+
 		glBindVertexArray(0);
     }
 }
@@ -196,24 +218,29 @@ int setupShader()
 	GLint success;
 	GLchar infoLog[512];
 
+    string vertexShaderSource = loadFile("../src/shaders/vivencial2/vertex.shader.glsl");
+    const char* vShaderSrc = vertexShaderSource.c_str();
+    string fragmentShaderSource = loadFile("../src/shaders/vivencial2/fragment.shader.glsl");
+    const char* fShaderSrc = fragmentShaderSource.c_str();
+
 	GLuint vertexShader = glCreateShader(GL_VERTEX_SHADER);
-	glShaderSource(vertexShader, 1, &vertexShaderSource, NULL);
+	glShaderSource(vertexShader, 1, &vShaderSrc, NULL);
 	glCompileShader(vertexShader);
 	glGetShaderiv(vertexShader, GL_COMPILE_STATUS, &success);
 	if (!success)
 	{
 		glGetShaderInfoLog(vertexShader, 512, NULL, infoLog);
-		std::cout << "ERROR::SHADER::VERTEX::COMPILATION_FAILED\n" << infoLog << std::endl;
+		cout << "ERROR::SHADER::VERTEX::COMPILATION_FAILED\n" << infoLog << endl;
 	}
-
+    
 	GLuint fragmentShader = glCreateShader(GL_FRAGMENT_SHADER);
-	glShaderSource(fragmentShader, 1, &fragmentShaderSource, NULL);
+	glShaderSource(fragmentShader, 1, &fShaderSrc, NULL);
 	glCompileShader(fragmentShader);
 	glGetShaderiv(fragmentShader, GL_COMPILE_STATUS, &success);
 	if (!success)
 	{
-		glGetShaderInfoLog(fragmentShader, 512, NULL, infoLog);
-		std::cout << "ERROR::SHADER::FRAGMENT::COMPILATION_FAILED\n" << infoLog << std::endl;
+        glGetShaderInfoLog(fragmentShader, 512, NULL, infoLog);
+		cout << "ERROR::SHADER::FRAGMENT::COMPILATION_FAILED\n" << infoLog << endl;
 	}
     
 	GLuint shaderProgram = glCreateProgram();
@@ -223,7 +250,7 @@ int setupShader()
 	glGetProgramiv(shaderProgram, GL_LINK_STATUS, &success);
 	if (!success) {
 		glGetProgramInfoLog(shaderProgram, 512, NULL, infoLog);
-		std::cout << "ERROR::SHADER::PROGRAM::LINKING_FAILED\n" << infoLog << std::endl;
+		cout << "ERROR::SHADER::PROGRAM::LINKING_FAILED\n" << infoLog << endl;
 	}
 	
 	glDeleteShader(vertexShader);
@@ -232,43 +259,44 @@ int setupShader()
 	return shaderProgram;
 }
 
-int loadSimpleOBJ(string filePATH, int &nVertices)
+int loadSimpleOBJ(string filePath, int &nVertices)
  {
-    std::vector<glm::vec3> vertices;
-    std::vector<glm::vec2> texCoords;
-    std::vector<glm::vec3> normals;
-    std::vector<GLfloat> vBuffer;
-    glm::vec3 color = glm::vec3(1.0, 0.0, 0.0);
+    vector<vec3> vertices;
+    vector<vec2> texCoords;
+    vector<vec3> normals;
+    vector<GLfloat> vBuffer;
+    vec3 color = vec3(1.0, 0.0, 0.0);
 
-    std::ifstream file(filePATH.c_str());
+    ifstream file(filePath.c_str());
+
     if (!file.is_open()) 
 	{
-        std::cerr << "Erro ao tentar ler o arquivo " << filePATH << std::endl;
+        cerr << "Erro ao tentar ler o arquivo " << filePath << endl;
         return -1;
     }
 
-    std::string line;
-    while (std::getline(file, line)) 
+    string line;
+    while (getline(file, line)) 
 	{
-        std::istringstream ssline(line);
-        std::string word;
+        istringstream ssline(line);
+        string word;
         ssline >> word;
 
         if (word == "v") 
 		{
-            glm::vec3 vertice;
+            vec3 vertice;
             ssline >> vertice.x >> vertice.y >> vertice.z;
             vertices.push_back(vertice);
         } 
         else if (word == "vt") 
 		{
-            glm::vec2 vt;
+            vec2 vt;
             ssline >> vt.s >> vt.t;
             texCoords.push_back(vt);
         } 
         else if (word == "vn") 
 		{
-            glm::vec3 normal;
+            vec3 normal;
             ssline >> normal.x >> normal.y >> normal.z;
             normals.push_back(normal);
         } 
@@ -277,12 +305,12 @@ int loadSimpleOBJ(string filePATH, int &nVertices)
             while (ssline >> word) 
 			{
                 int vi = 0, ti = 0, ni = 0;
-                std::istringstream ss(word);
-                std::string index;
+                istringstream ss(word);
+                string index;
 
-                if (std::getline(ss, index, '/')) vi = !index.empty() ? std::stoi(index) - 1 : 0;
-                if (std::getline(ss, index, '/')) ti = !index.empty() ? std::stoi(index) - 1 : 0;
-                if (std::getline(ss, index)) ni = !index.empty() ? std::stoi(index) - 1 : 0;
+                if (getline(ss, index, '/')) vi = !index.empty() ? stoi(index) - 1 : 0;
+                if (getline(ss, index, '/')) ti = !index.empty() ? stoi(index) - 1 : 0;
+                if (getline(ss, index)) ni = !index.empty() ? stoi(index) - 1 : 0;
 
                 vBuffer.push_back(vertices[vi].x);
                 vBuffer.push_back(vertices[vi].y);
@@ -323,4 +351,23 @@ int loadSimpleOBJ(string filePATH, int &nVertices)
 	nVertices = vBuffer.size() / 8;
 
     return VAO;
+}
+
+string loadFile(string filePath) {
+    ifstream file(filePath.c_str());
+
+    if (!file.is_open()) 
+	{
+        cerr << "Erro ao tentar ler o arquivo " << filePath << endl;
+        return "";
+    }
+
+    stringstream buffer;
+    buffer.clear();
+    buffer << file.rdbuf();
+
+    file.close();
+    string content = buffer.str();
+
+    return content;
 }
