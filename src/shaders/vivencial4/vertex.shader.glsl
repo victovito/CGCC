@@ -7,14 +7,14 @@ layout (location = 2) in vec3 v_normal;
 uniform mat4 projection;
 uniform mat4 model;
 
-out vec3 f_position;
-out vec2 f_uv;
-out vec3 f_normal;
+out vec3 position;
+out vec2 uv;
+out vec3 normal;
 
 void main() {
-    f_position = v_position;
-    f_normal = v_normal;
-    f_uv = v_uv;
+    position = (model * vec4(v_position, 1.0)).xyz;
+    normal = normalize(mat3(transpose(inverse(model))) * v_normal);
+    uv = v_uv;
 
 	gl_Position = projection * model * vec4(v_position, 1.0);
 }

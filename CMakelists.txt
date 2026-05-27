@@ -48,7 +48,7 @@ set(EXERCISES
     Modulo2
     Vivencial2
     Modulo3
-    Vivencial3
+    Vivencial4
 )
 
 add_compile_options(-Wno-pragmas)

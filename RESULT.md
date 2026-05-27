@@ -11,3 +11,6 @@
 
 ## Atividade do módulo 3
 ![Modulo2](prints/modulo3.png)
+
+## Vivencial do módulo 4
+![Modulo2](prints/vivencial4.png)

@@ -1,10 +1,21 @@
 /* Atividade vivencial do Módulo 2 - Victor Silva da Rosa */
 
+/*
+Controles:
+	1234567890 - Seleciona um objeto para manipular
+	WASD - Move nos eixos X e Z
+	IJ - Move no eixo Y
+	[] - Modifica a escala
+	XYZ - Rotaciona nos eixos XYZ
+	KFB - Ativa/desativa as luzes (key light, fill light e backlight, respectivamente)
+*/
+
 #include <iostream>
 #include <filesystem>
 #include <fstream>
 #include <sstream>
 #include <string>
+#include <format>
 #include <vector>
 #include <assert.h>
 
@@ -29,19 +40,24 @@ const GLuint WIDTH = 800, HEIGHT = 800;
 const int MAX_OBJECTS = 10;
 const int MAX_LIGHTS = 16;
 
-const string meshes[]{
+const string meshes[] {
+	"../meshes/Suzanne.obj",
+	"../meshes/Suzanne.obj",
 	"../meshes/Suzanne.obj",
 };
 
-void loadOBJ(string filePath, GLuint &VAO, int &nVertices, GLuint &texId);
+void loadOBJ(string filePath, GLuint &VAO, int &nVertices, GLuint &texId, float &ka, float &kd, float &ks, float &ns);
 GLuint loadTexture(string filePath, int &width, int &height);
 string loadFile(string filePath);
-bool getTextureNameFromMtl(string filePath, string &textureName);
+bool getMaterialFromMtl(string filePath, string &textureName, float &ka, float &kd, float &ks, float &ns);
 void key_callback(GLFWwindow *window, int key, int scancode, int action, int mode);
+void resetInputs();
 int setupShader();
 void setupMeshes();
+void setupLights();
 void updateObjects();
-void renderMeshes(GLuint shaderID);
+void updateLights();
+void renderScene(GLuint shaderID);
 
 struct Inputs
 {
@@ -61,26 +77,39 @@ struct Inputs
 	// Escalonar
 	bool leftBracket;
 	bool rightBracket;
+
+	// Controle de luzes
+	bool K;
+	bool F;
+	bool B;
 };
 
 struct Object
 {
 	GLuint VAO;
-	GLuint texId;
 	int nVertex;
 	vec3 position;
 	vec3 rotation;
 	float scale;
+
+	GLuint texId;
+	float ka, kd, ks, ns;
 };
 
 struct Light {
     vec3 position;
     vec3 color;
+	bool enabled;
 };
 
 Inputs inputs;
+
 Object objects[MAX_OBJECTS];
 int objectsCount = 0;
+
+Light lights[MAX_LIGHTS];
+int lightsCount = 0;
+
 int selectedObject = 0;
 float lastFrame = 0;
 
@@ -88,7 +117,7 @@ int main()
 {
 	glfwInit();
 
-	GLFWwindow *window = glfwCreateWindow(WIDTH, HEIGHT, "Módulo 3 - Victor Silva da Rosa", nullptr, nullptr);
+	GLFWwindow *window = glfwCreateWindow(WIDTH, HEIGHT, "Vivencial 4 - Victor Silva da Rosa", nullptr, nullptr);
 	glfwMakeContextCurrent(window);
 
 	glfwSetKeyCallback(window, key_callback);
@@ -110,6 +139,7 @@ int main()
 	GLuint shaderID = setupShader();
 
 	setupMeshes();
+	setupLights();
 
 	glUseProgram(shaderID);
 	glUniform1i(glGetUniformLocation(shaderID, "mainTexture"), 0);
@@ -127,9 +157,12 @@ int main()
 		glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
 		updateObjects();
+		updateLights();
+		
 		lastFrame = (float)glfwGetTime();
+		resetInputs();
 
-		renderMeshes(shaderID);
+		renderScene(shaderID);
 
 		// Troca os buffers da tela
 		glfwSwapBuffers(window);
@@ -167,6 +200,13 @@ void key_callback(GLFWwindow *window, int key, int scancode, int action, int mod
 	if (key == GLFW_KEY_RIGHT_BRACKET)
 		inputs.rightBracket = action;
 
+	if (key == GLFW_KEY_K)
+		inputs.K = action == GLFW_PRESS;
+	if (key == GLFW_KEY_F)
+		inputs.F = action == GLFW_PRESS;
+	if (key == GLFW_KEY_B)
+		inputs.B = action == GLFW_PRESS;
+	
 	if (key == GLFW_KEY_1)
 		selectedObject = 0;
 	if (key == GLFW_KEY_2)
@@ -187,8 +227,14 @@ void key_callback(GLFWwindow *window, int key, int scancode, int action, int mod
 		selectedObject = 8;
 	if (key == GLFW_KEY_0)
 		selectedObject = 9;
-
+	
 	selectedObject = selectedObject % MAX_OBJECTS;
+}
+
+void resetInputs() {
+	inputs.K = false;
+	inputs.F = false;
+	inputs.B = false;
 }
 
 void setupMeshes()
@@ -196,14 +242,37 @@ void setupMeshes()
 	for (int i = 0; i < size(meshes); i++)
 	{
 		Object obj;
-		obj.position = vec3(0, 0, -10);
+		obj.position = vec3(0, 0, -5);
 		obj.rotation = vec3(0, 0, 0);
 		obj.scale = 1;
-		loadOBJ(meshes[i], obj.VAO, obj.nVertex, obj.texId);
+		loadOBJ(meshes[i], obj.VAO, obj.nVertex, obj.texId, obj.ka, obj.kd, obj.ks, obj.ns);
 
 		objects[i] = obj;
 		objectsCount++;
 	}
+}
+
+void setupLights()
+{
+	Light keyLight;
+	keyLight.position = vec3(-2, 0, -1);
+	keyLight.color = vec3(255, 255, 220) / 255.0f;
+	keyLight.enabled = true;
+	lights[0] = keyLight;
+	
+	Light fillLight;
+	fillLight.position = vec3(3, 0, -2);
+	fillLight.color = vec3(150, 150, 129) / 255.0f;
+	fillLight.enabled = true;
+	lights[1] = fillLight;
+	
+	Light backLight;
+	backLight.position = vec3(-4, 0, -8);
+	backLight.color = vec3(179, 93, 23) / 255.0f;
+	backLight.enabled = true;
+	lights[2] = backLight;
+
+	lightsCount = 3;
 }
 
 void updateObjects()
@@ -222,17 +291,42 @@ void updateObjects()
 	objects[selectedObject] = selected;
 }
 
-void renderMeshes(GLuint shaderId)
+void updateLights()
+{
+	if (inputs.K) lights[0].enabled = !lights[0].enabled;
+	if (inputs.F) lights[1].enabled = !lights[1].enabled;
+	if (inputs.B) lights[2].enabled = !lights[2].enabled;
+}
+
+void renderScene(GLuint shaderId)
 {
 	GLint projectionLoc = glGetUniformLocation(shaderId, "projection");
 	GLint modelLoc = glGetUniformLocation(shaderId, "model");
-	GLint lightPosLoc = glGetUniformLocation(shaderId, "lightPos");
+	GLint lightsCountLoc = glGetUniformLocation(shaderId, "lightsCount");
+	GLint kaLoc = glGetUniformLocation(shaderId, "ka");
+	GLint kdLoc = glGetUniformLocation(shaderId, "kd");
+	GLint ksLoc = glGetUniformLocation(shaderId, "ks");
+	GLint shininessLoc = glGetUniformLocation(shaderId, "shininess");
 
-	mat4 projection = perspective((float)M_PI / 6, (float)WIDTH / HEIGHT, 0.01f, 1000.0f);
+	mat4 projection = perspective(radians(75.0f), (float)WIDTH / HEIGHT, 0.01f, 1000.0f);
 	glUniformMatrix4fv(projectionLoc, 1, GL_FALSE, value_ptr(projection));
 
-	vec3 lightPos = vec3(2.0);
-	glUniform3fv(lightPosLoc, 1, value_ptr(lightPos));
+	glUniform1i(lightsCountLoc, lightsCount);
+
+	for (int i = 0; i < lightsCount; i++)
+	{
+		Light light = lights[i];
+
+		string lightLoc = string("lights[") + to_string(i) + string("].");
+		
+		GLint positionLoc = glGetUniformLocation(shaderId, (lightLoc + string("position")).c_str());
+		GLint colorLoc = glGetUniformLocation(shaderId, (lightLoc + string("color")).c_str());
+		GLint enabledLoc = glGetUniformLocation(shaderId, (lightLoc + string("enabled")).c_str());
+
+		glUniform3fv(positionLoc, 1, value_ptr(light.position));
+		glUniform3fv(colorLoc, 1, value_ptr(light.color));
+		glUniform1i(enabledLoc, light.enabled);
+	}
 
 	for (int i = 0; i < objectsCount; i++)
 	{
@@ -249,6 +343,11 @@ void renderMeshes(GLuint shaderId)
 		model = scale(model, vec3(obj.scale));
 
 		glUniformMatrix4fv(modelLoc, 1, GL_FALSE, value_ptr(model));
+		
+		glUniform1f(kaLoc, obj.ka);
+		glUniform1f(kdLoc, obj.kd);
+		glUniform1f(ksLoc, obj.ks);
+		glUniform1f(shininessLoc, obj.ns);
 
 		glBindVertexArray(obj.VAO);
 		glBindTexture(GL_TEXTURE_2D, obj.texId);
@@ -269,9 +368,9 @@ int setupShader()
 	GLint success;
 	GLchar infoLog[512];
 
-	string vertexShaderSource = loadFile("../src/shaders/modulo3/vertex.shader.glsl");
+	string vertexShaderSource = loadFile("../src/shaders/vivencial4/vertex.shader.glsl");
 	const char *vShaderSrc = vertexShaderSource.c_str();
-	string fragmentShaderSource = loadFile("../src/shaders/modulo3/fragment.shader.glsl");
+	string fragmentShaderSource = loadFile("../src/shaders/vivencial4/fragment.shader.glsl");
 	const char *fShaderSrc = fragmentShaderSource.c_str();
 
 	GLuint vertexShader = glCreateShader(GL_VERTEX_SHADER);
@@ -314,7 +413,7 @@ int setupShader()
 	return shaderProgram;
 }
 
-void loadOBJ(string filePath, GLuint &VAO, int &nVertices, GLuint &texId)
+void loadOBJ(string filePath, GLuint &VAO, int &nVertices, GLuint &texId, float &ka, float &kd, float &ks, float &ns)
 {
 	vector<vec3> vertices;
 	vector<vec2> texCoords;
@@ -383,7 +482,8 @@ void loadOBJ(string filePath, GLuint &VAO, int &nVertices, GLuint &texId)
 				vBuffer.push_back(normals[ni].z);
 			}
 		}
-		else if (word == "mtllib") {
+		else if (word == "mtllib")
+		{
 			filesystem::path dir = filesystem::path(filePath).parent_path();
 			
 			filesystem::path name;
@@ -392,7 +492,9 @@ void loadOBJ(string filePath, GLuint &VAO, int &nVertices, GLuint &texId)
 			filesystem::path mtl = dir/name;
 			
 			string textureName;
-            if (getTextureNameFromMtl(mtl.string(), textureName)) {
+
+            if (getMaterialFromMtl(mtl.string(), textureName, ka, kd, ks, ns))
+			{
 				int w, h;
 				texId = loadTexture((dir/textureName).string(), w, h);
 			}
@@ -488,7 +590,7 @@ string loadFile(string filePath)
 	return content;
 }
 
-bool getTextureNameFromMtl(string filePath, string &textureName)
+bool getMaterialFromMtl(string filePath, string &textureName, float &ka, float &kd, float &ks, float &ns)
 {
     ifstream file(filePath.c_str());
 
@@ -506,6 +608,22 @@ bool getTextureNameFromMtl(string filePath, string &textureName)
                 ssline >> textureName;
 				return true;
             }
+			if (word == "Ka")
+			{
+				ssline >> ka;
+			}
+			if (word == "Kd")
+			{
+				ssline >> kd;
+			}
+			if (word == "Ks")
+			{
+				ssline >> ks;
+			}
+			if (word == "Ns")
+			{
+				ssline >> ns;
+			}
         }
     }
 
