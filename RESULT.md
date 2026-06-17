@@ -17,3 +17,6 @@
 
 ## Atividade do módulo 5
 ![Modulo2](prints/modulo5.png)
+
+## Atividade do módulo 6
+![Modulo2](prints/modulo6.png)
