@@ -18,6 +18,8 @@ Caminhão: [Low-poly truck (car "Drifter")](https://sketchfab.com/3d-models/low-
 
 Cone: [Traffic Cone](https://sketchfab.com/3d-models/traffic-cone-66b282e65d3b4da8a883ae8579bfb33c#download)
 
+Textura de concreto: [3 Free Concrete Textures (JPG)](https://unblast.com/3-free-concrete-textures-jpg/)
+
 Programas utilizados: [Blender](https://www.blender.org/)
 
 # Referências
