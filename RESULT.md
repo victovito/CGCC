@@ -20,3 +20,6 @@
 
 ## Atividade do módulo 6
 ![Modulo2](prints/modulo6.png)
+
+## Projeto final
+![Modulo2](prints/final.png)
